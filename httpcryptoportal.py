@@ -1,34 +1,54 @@
-#! /usr/bin/python3
-
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 import sqlite3
 import html
-import hashlib
+import bcrypt
 import uuid
+import time
 import os
 
-# -------------------------
-# SESSION STORAGE (RAM)
-# -------------------------
-SESSIONS = {}
+# =========================
+# SECURITY CONFIG
+# =========================
 
-# -------------------------
+SESSIONS = {}  # session_id -> {user, expiry}
+LOGIN_FAILS = {}  # ip -> [count, last_time]
+
+SESSION_TIMEOUT = 1800  # 30 min
+MAX_ATTEMPTS = 5
+BLOCK_TIME = 60
+
+# =========================
+# DB
+# =========================
+
+def get_db():
+    con = sqlite3.connect("data/cryptoportal.db")
+    con.row_factory = sqlite3.Row
+    return con
+
+
+# =========================
 # HELPERS
-# -------------------------
-def convert_int(s):
+# =========================
+
+def now():
+    return time.time()
+
+
+def clean_int(v):
     try:
-        return int(s)
-    except ValueError:
+        return int(v)
+    except:
         return 0
 
 
-def get_db():
-    return sqlite3.connect("data/cryptoportal.db")
+def get_client_ip(handler):
+    return handler.client_address[0]
 
 
-def get_user_from_request(self):
-    cookie = self.headers.get("Cookie", "")
+def get_user(handler):
+    cookie = handler.headers.get("Cookie", "")
     cookies = {}
 
     for part in cookie.split(";"):
@@ -36,217 +56,194 @@ def get_user_from_request(self):
             k, v = part.strip().split("=", 1)
             cookies[k] = v
 
-    session_id = cookies.get("session")
-    return SESSIONS.get(session_id)
+    sid = cookies.get("session")
+    if not sid or sid not in SESSIONS:
+        return None
+
+    session = SESSIONS[sid]
+
+    if session["expiry"] < now():
+        del SESSIONS[sid]
+        return None
+
+    session["expiry"] = now() + SESSION_TIMEOUT
+    return session["user"]
 
 
-VALID_SIDES = {"Buy", "Sell"}
-VALID_CURRENCIES = {"EUR", "USD", "GBP"}
+def block_ip(ip):
+    data = LOGIN_FAILS.get(ip)
 
-# -------------------------
+    if not data:
+        return False
+
+    count, last = data
+
+    if count >= MAX_ATTEMPTS and now() - last < BLOCK_TIME:
+        return True
+
+    if now() - last > BLOCK_TIME:
+        LOGIN_FAILS[ip] = [0, now()]
+
+    return False
+
+
+def fail_ip(ip):
+    count, _ = LOGIN_FAILS.get(ip, [0, now()])
+    LOGIN_FAILS[ip] = [count + 1, now()]
+
+
+# =========================
 # SERVER
-# -------------------------
-class HTTPRequestHandler(BaseHTTPRequestHandler):
+# =========================
+
+class Handler(BaseHTTPRequestHandler):
 
     # -------------------------
     # GET
     # -------------------------
     def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        urlparams = urllib.parse.parse_qs(parsed.query)
+        path = urllib.parse.urlparse(self.path).path
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
 
-        # -------------------------
-        # STATIC FILES (CSS / JS / IMAGES / ETC)
-        # -------------------------
-        file_path = "www" + path
-        if path != "/" and os.path.isfile(file_path):
-            self.send_response(200)
+        user = get_user(self)
 
-            if file_path.endswith(".css"):
+        # ---------------- CSS STATIC ----------------
+        if path == "/style.css":
+            if os.path.exists("www/style.css"):
+                self.send_response(200)
                 self.send_header("Content-type", "text/css")
-            elif file_path.endswith(".js"):
-                self.send_header("Content-type", "application/javascript")
-            elif file_path.endswith(".jpeg") or file_path.endswith(".jpg"):
-                self.send_header("Content-type", "image/jpeg")
-            else:
-                self.send_header("Content-type", "application/octet-stream")
+                self.end_headers()
+                self.wfile.write(open("www/style.css", "rb").read())
+                return
 
-            self.end_headers()
-
-            with open(file_path, "rb") as f:
-                self.wfile.write(f.read())
-            return
-
-        # -------------------------
-        # HOME
-        # -------------------------
+        # ---------------- HOME ----------------
         if path == "/":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            with open("www/main.html", "rb") as f:
-                self.wfile.write(f.read())
+
+            page = open("www/main.html", "r", encoding="utf-8").read()
+            page = page.replace("__LOGGED__", "yes" if user else "no")
+
+            self.wfile.write(page.encode())
             return
 
-        # -------------------------
-        # LOGIN PAGE
-        # -------------------------
-        elif path == "/login":
+        # ---------------- LOGIN ----------------
+        if path == "/login":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            with open("www/login.html", "rb") as f:
-                self.wfile.write(f.read())
+            self.wfile.write(open("www/login.html", "rb").read())
             return
 
-        # -------------------------
-        # REGISTER PAGE
-        # -------------------------
-        elif path == "/register":
+        # ---------------- REGISTER ----------------
+        if path == "/register":
             self.send_response(200)
             self.send_header("Content-type", "text/html")
             self.end_headers()
-            with open("www/register.html", "rb") as f:
-                self.wfile.write(f.read())
+            self.wfile.write(open("www/register.html", "rb").read())
             return
 
-        # -------------------------
-        # LOGOUT
-        # -------------------------
-        elif path == "/logout":
+        # ---------------- LOGOUT ----------------
+        if path == "/logout":
             cookie = self.headers.get("Cookie", "")
             if "session=" in cookie:
-                session_id = cookie.split("session=")[-1].split(";")[0]
-                SESSIONS.pop(session_id, None)
+                sid = cookie.split("session=")[-1].split(";")[0]
+                SESSIONS.pop(sid, None)
 
             self.send_response(302)
-            self.send_header("Location", "/login")
+            self.send_header("Location", "/")
             self.end_headers()
             return
 
-        # -------------------------
-        # ORDER VIEW (PROTECTED)
-        # -------------------------
-        elif path == "/orderview":
-            user = get_user_from_request(self)
+        # ---------------- ORDERS (PROTECTED) ----------------
+        if path == "/orderview":
             if not user:
-                self.send_response(302)
-                self.send_header("Location", "/login")
-                self.end_headers()
+                self.redirect("/login")
                 return
 
-            walletid = convert_int(urlparams.get("walletid", ["0"])[0])
+            walletid = clean_int(params.get("walletid", ["0"])[0])
 
             con = get_db()
             cur = con.cursor()
 
-            orders = """
-            <table border="1">
-            <tr>
-                <th>Wallet</th><th>Order</th><th>Crypto</th>
-                <th>Side</th><th>Price</th><th>Currency</th>
-                <th>Qty</th><th>Status</th>
-            </tr>
-            """
-
-            for row in cur.execute("""
-                SELECT orderbook.walletid, orderbook.id, crypto.name,
-                       orderbook.side, orderbook.price,
-                       orderbook.currency, orderbook.qty, orderbook.status
+            rows = cur.execute("""
+                SELECT orderbook.id, crypto.name, side, price, currency, qty, status
                 FROM orderbook
                 JOIN crypto ON crypto.id = orderbook.cryptoid
-                WHERE orderbook.walletid = ?
-            """, (walletid,)):
+                WHERE walletid = ?
+            """, (walletid,)).fetchall()
 
-                orders += "<tr>" + "".join(
-                    f"<td>{html.escape(str(x))}</td>" for x in row
-                ) + "</tr>"
-
-            orders += "</table>"
-
-            cur.close()
             con.close()
 
-            with open("www/orderview.html", "r", encoding="utf-8") as f:
-                page = f.read()
+            table = "<table border='1'><tr><th>ID</th><th>Crypto</th><th>Side</th><th>Price</th><th>Currency</th><th>Qty</th><th>Status</th></tr>"
 
-            page = page.replace("__WALLETID__", str(walletid))
-            page = page.replace("__ORDERS__", orders)
+            for r in rows:
+                table += "<tr>" + "".join(f"<td>{html.escape(str(x))}</td>" for x in r) + "</tr>"
+
+            table += "</table>"
+
+            page = open("www/orderview.html", "r", encoding="utf-8").read()
+            page = page.replace("__ORDERS__", table)
 
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(page.encode("utf-8"))
+            self.wfile.write(page.encode())
             return
 
-        # -------------------------
-        # ORDER ENTER PAGE (PROTECTED)
-        # -------------------------
-        elif path == "/orderenter":
-            user = get_user_from_request(self)
+        # ---------------- ORDER PAGE ----------------
+        if path == "/orderenter":
             if not user:
-                self.send_response(302)
-                self.send_header("Location", "/login")
-                self.end_headers()
+                self.redirect("/login")
                 return
 
             con = get_db()
             cur = con.cursor()
 
-            htmlcryptos = ""
-            for row in cur.execute("SELECT id, name FROM crypto"):
-                htmlcryptos += f"<option value='{row[0]}'>{html.escape(row[1])}</option>"
-
-            cur.close()
+            cryptos = cur.execute("SELECT id, name FROM crypto").fetchall()
             con.close()
 
-            with open("www/orderenter.html", "r", encoding="utf-8") as f:
-                page = f.read()
+            options = "".join(
+                f"<option value='{c['id']}'>{html.escape(c['name'])}</option>"
+                for c in cryptos
+            )
 
-            page = page.replace("__CRYPTOS__", htmlcryptos)
+            page = open("www/orderenter.html", "r", encoding="utf-8").read()
+            page = page.replace("__CRYPTOS__", options)
 
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
             self.end_headers()
-            self.wfile.write(page.encode("utf-8"))
+            self.wfile.write(page.encode())
             return
 
-        # -------------------------
-        # 404
-        # -------------------------
-        else:
-            self.send_response(404)
-            self.send_header("Content-type", "text/html")
-            self.end_headers()
-            with open("www/error404.html", "rb") as f:
-                self.wfile.write(f.read())
-            return
+        # ---------------- 404 ----------------
+        self.send_response(404)
+        self.end_headers()
+        self.wfile.write(b"Not found")
+
 
     # -------------------------
     # POST
     # -------------------------
     def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-
+        path = urllib.parse.urlparse(self.path).path
         length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode("utf-8")
-        data = urllib.parse.parse_qs(body)
+        data = urllib.parse.parse_qs(self.rfile.read(length).decode())
 
-        # -------------------------
-        # REGISTER
-        # -------------------------
+        ip = get_client_ip(self)
+
+        # =========================
+        # REGISTER (SECURE)
+        # =========================
         if path == "/register":
             username = data.get("username", [""])[0].strip()
             password = data.get("password", [""])[0].strip()
 
             if not username or not password:
-                self.send_response(400)
-                self.end_headers()
+                self.send_error(400)
                 return
 
-            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
             con = get_db()
             cur = con.cursor()
@@ -260,16 +257,14 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
             try:
                 cur.execute(
-                    "INSERT INTO users (username, password) VALUES (?, ?)",
-                    (username, password_hash)
+                    "INSERT INTO users VALUES (?, ?)",
+                    (username, hashed)
                 )
                 con.commit()
-            except sqlite3.IntegrityError:
-                self.send_response(409)
-                self.end_headers()
+            except:
+                self.send_error(409)
                 return
 
-            cur.close()
             con.close()
 
             self.send_response(302)
@@ -277,13 +272,17 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        # -------------------------
-        # LOGIN
-        # -------------------------
-        elif path == "/login":
+        # =========================
+        # LOGIN (BRUTE FORCE PROTECTED)
+        # =========================
+        if path == "/login":
+
+            if block_ip(ip):
+                self.send_error(429)
+                return
+
             username = data.get("username", [""])[0]
             password = data.get("password", [""])[0]
-            password_hash = hashlib.sha256(password.encode()).hexdigest()
 
             con = get_db()
             cur = con.cursor()
@@ -293,88 +292,73 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 (username,)
             ).fetchone()
 
-            cur.close()
             con.close()
 
-            if user and user[0] == password_hash:
-                session_id = str(uuid.uuid4())
-                SESSIONS[session_id] = username
+            if user and bcrypt.checkpw(password.encode(), user[0].encode()):
+                sid = str(uuid.uuid4())
+
+                SESSIONS[sid] = {
+                    "user": username,
+                    "expiry": now() + SESSION_TIMEOUT
+                }
 
                 self.send_response(302)
                 self.send_header("Location", "/")
-                self.send_header("Set-Cookie", f"session={session_id}; HttpOnly")
+                self.send_header("Set-Cookie", f"session={sid}; HttpOnly; SameSite=Strict")
                 self.end_headers()
-            else:
-                self.send_response(401)
-                self.end_headers()
+                return
+
+            fail_ip(ip)
+            self.send_error(401)
             return
 
-        # -------------------------
-        # ORDER ENTER
-        # -------------------------
-        elif path == "/orderenter":
-            user = get_user_from_request(self)
+        # =========================
+        # ORDER ENTER (PROTECTED)
+        # =========================
+        if path == "/orderenter":
+            user = get_user(self)
             if not user:
-                self.send_response(302)
-                self.send_header("Location", "/login")
-                self.end_headers()
+                self.send_error(403)
                 return
 
-            walletid = convert_int(data.get("walletid", ["0"])[0])
-            cryptoid = convert_int(data.get("cryptoid", ["1"])[0])
+            walletid = clean_int(data.get("walletid", ["0"])[0])
+            cryptoid = clean_int(data.get("cryptoid", ["1"])[0])
             side = data.get("side", ["Buy"])[0]
-            price = convert_int(data.get("price", ["0"])[0])
+            price = clean_int(data.get("price", ["0"])[0])
             currency = data.get("currency", ["EUR"])[0]
-            qty = convert_int(data.get("quantity", ["0"])[0])
-
-            if walletid <= 0 or price <= 0 or qty <= 0:
-                self.send_error(400)
-                return
-
-            if side not in VALID_SIDES or currency not in VALID_CURRENCIES:
-                self.send_error(400)
-                return
+            qty = clean_int(data.get("quantity", ["0"])[0])
 
             con = get_db()
             cur = con.cursor()
 
-            exists = cur.execute(
-                "SELECT COUNT(*) FROM wallet WHERE id=?",
-                (walletid,)
-            ).fetchone()[0]
-
-            if exists == 0:
-                self.send_error(401)
-                return
-
-            orderid = cur.execute(
-                "SELECT COALESCE(MAX(id), 0) FROM orderbook"
-            ).fetchone()[0] + 1
+            oid = cur.execute("SELECT COALESCE(MAX(id),0)+1 FROM orderbook").fetchone()[0]
 
             cur.execute("""
-                INSERT INTO orderbook
-                (id, walletid, cryptoid, side, price, currency, qty, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (orderid, walletid, cryptoid, side, price, currency, qty, "NEW"))
+                INSERT INTO orderbook VALUES (?, ?, ?, ?, ?, ?, ?, 'NEW')
+            """, (oid, walletid, cryptoid, side, price, currency, qty))
 
             con.commit()
-            cur.close()
             con.close()
 
             self.send_response(303)
             self.send_header("Location", f"/orderview?walletid={walletid}")
             self.end_headers()
-            return
+
+    # -------------------------
+    def redirect(self, url):
+        self.send_response(302)
+        self.send_header("Location", url)
+        self.end_headers()
 
 
-# -------------------------
+# =========================
 # START SERVER
-# -------------------------
-httpd = HTTPServer(("", 8080), HTTPRequestHandler)
-print("CryptoPortal running on http://localhost:8080")
+# =========================
+
+httpd = HTTPServer(("", 8080), Handler)
+print("Secure CryptoPortal running on http://localhost:8080")
 
 try:
     httpd.serve_forever()
 except KeyboardInterrupt:
-    print("Stopping server...")
     httpd.server_close()
