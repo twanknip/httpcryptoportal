@@ -1,0 +1,7 @@
+2026-06-02 09:24:21,194 - WARNING - SSL certificates not found. Running on HTTP (INSECURE) on port 8080
+2026-06-02 09:24:36,816 - INFO - GET / from 127.0.0.1
+2026-06-02 09:24:37,079 - WARNING - 404 Not Found: /favicon.ico from 127.0.0.1
+2026-06-02 09:24:42,129 - WARNING - Unauthorized orderview attempt from 127.0.0.1
+2026-06-02 09:24:44,934 - INFO - GET / from 127.0.0.1
+2026-06-02 09:25:02,089 - INFO - Server shutting down
+2026-06-02 09:25:02,090 - INFO - Server closed

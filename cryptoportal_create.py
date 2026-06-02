@@ -1,95 +1,131 @@
 #!/usr/bin/python3
 
 #
-# Secure sqlite program for creating the cryptoportal database
-# 
-# SECURITY IMPROVEMENTS:
-# - Uses bcrypt for password hashing instead of MD5
-# - Stores proper password hashes instead of weak MD5
+# SQLite programma voor het aanmaken van de CryptoPortal database
 #
 
+import os
 import sqlite3
 
-# For password hashing, install bcrypt: pip install bcrypt
-try:
-    import bcrypt
-    def hash_password(password):
-        """Hash password using bcrypt."""
-        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-except ImportError:
-    import hashlib
-    def hash_password(password):
-        """Fallback: simple SHA256 hash (NOT SECURE - use bcrypt in production)."""
-        print("WARNING: bcrypt not installed. Using insecure SHA256 hashing.")
-        print("Install bcrypt with: pip install bcrypt")
-        return hashlib.sha256(password.encode()).hexdigest()
+# Maak de data-map automatisch aan
+os.makedirs("data", exist_ok=True)
 
-con = sqlite3.connect("cryptoportal.db")
+DB_FILE = "data/cryptoportal.db"
+
+con = sqlite3.connect(DB_FILE)
 cur = con.cursor()
 
-# Create wallet table with password hashing
-cur.execute("DROP TABLE IF EXISTS wallet")
-cur.execute("CREATE TABLE wallet(id PRIMARY KEY, password_hash TEXT NOT NULL)")
+#
+# Wallet tabel
+#
 
-# Example wallets with passwords:
-# Wallet 314: password is "securepass123"
-# Wallet 159: password is "trading2024"
-# Wallet 265: password is "crypto@secure"
-# Wallet 358: password is "bitcoin.eth"
+cur.execute("DROP TABLE IF EXISTS wallet")
+
+cur.execute("""
+CREATE TABLE wallet (
+    id INTEGER PRIMARY KEY,
+    hash TEXT NOT NULL
+)
+""")
 
 wallets = [
-    (314, "securepass123"),
-    (159, "trading2024"),
-    (265, "crypto@secure"),
-    (358, "bitcoin.eth")
+    (314, "642606e93992a316419e8b6081af73dd"),
+    (159, "78085aa67eaa6d90ad7b067e5a05cd5e"),
+    (265, "259a568c9e5262afa3bb020a24f9457e"),
+    (358, "173bb7ab566b5ff777d6f6bc8cfd0e63"),
 ]
 
-for wallet_id, password in wallets:
-    password_hash = hash_password(password)
-    cur.execute("INSERT INTO wallet VALUES(?, ?)", [wallet_id, password_hash])
-    print(f"Created wallet {wallet_id} with secure password hash")
+cur.executemany(
+    "INSERT INTO wallet (id, hash) VALUES (?, ?)",
+    wallets
+)
 
-for row in cur.execute("SELECT id FROM wallet"):
-    print(f"  - Wallet {row[0]} ready")
-    
+print("\n=== WALLETS ===")
+for row in cur.execute("SELECT * FROM wallet"):
+    print(row)
+
+#
+# Crypto tabel
+#
+
 cur.execute("DROP TABLE IF EXISTS crypto")
-cur.execute("CREATE TABLE crypto(id PRIMARY KEY, name TEXT NOT NULL)")
-cur.execute("INSERT INTO crypto VALUES( 1, 'Bitcoin (BTC)')")
-cur.execute("INSERT INTO crypto VALUES( 2, 'Ethereum (ETH)')")
-cur.execute("INSERT INTO crypto VALUES( 3, 'Tether (USDT)')")
-cur.execute("INSERT INTO crypto VALUES( 4, 'USD Coin (USDC)')")
 
+cur.execute("""
+CREATE TABLE crypto (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+)
+""")
+
+cryptos = [
+    (1, "Bitcoin (BTC)"),
+    (2, "Ethereum (ETH)"),
+    (3, "Tether (USDT)"),
+    (4, "USD Coin (USDC)")
+]
+
+cur.executemany(
+    "INSERT INTO crypto (id, name) VALUES (?, ?)",
+    cryptos
+)
+
+print("\n=== CRYPTO ===")
 for row in cur.execute("SELECT * FROM crypto"):
-    print(f"  - Crypto: {row}")
-    
+    print(row)
+
+#
+# Orderboek tabel
+#
+
 cur.execute("DROP TABLE IF EXISTS orderbook")
-cur.execute("CREATE TABLE orderbook(id PRIMARY KEY, walletid INTEGER, cryptoid INTEGER, side TEXT, price INTEGER, currency TEXT, qty INTEGER, status TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+
+cur.execute("""
+CREATE TABLE orderbook (
+    id INTEGER PRIMARY KEY,
+    walletid INTEGER NOT NULL,
+    cryptoid INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    price INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    qty INTEGER NOT NULL,
+    status TEXT NOT NULL,
+
+    FOREIGN KEY(walletid) REFERENCES wallet(id),
+    FOREIGN KEY(cryptoid) REFERENCES crypto(id)
+)
+""")
 
 orders = [
-    (1, 314, 1, 'Buy' , 89535, 'EUR',     2, 'NEW'),
-    (2, 314, 1, 'Sell', 89546, 'EUR',     2, 'NEW'),
-    (3, 314, 2, 'Buy' ,  3270, 'EUR',    17, 'NEW'),
-    (4, 159, 2, 'Buy' ,  3269, 'EUR',    27, 'NEW'),
-    (5, 159, 3, 'Buy' ,     1, 'USD', 20000, 'NEW'),
-    (6, 159, 3, 'Sell',     2, 'USD', 12000, 'NEW'),
-    (7, 265, 1, 'Buy' , 74403, 'GBP',     2, 'NEW'),
-    (8, 265, 1, 'Sell', 74567, 'GBP',     6, 'NEW'),
-    (9, 265, 1, 'Sell', 73987, 'GBP',     5, 'NEW'),
-    (10, 358, 4, 'Buy' ,     7, 'USD', 30000, 'NEW'),
-    (11, 358, 4, 'Sell',     6, 'USD', 25000, 'NEW'),
-    (12, 358, 4, 'Buy' ,     6, 'USD', 10000, 'NEW'),
+    (1, 314, 1, "Buy", 89535, "EUR", 2, "NEW"),
+    (2, 314, 1, "Sell", 89546, "EUR", 2, "NEW"),
+    (3, 314, 2, "Buy", 3270, "EUR", 17, "NEW"),
+    (4, 159, 2, "Buy", 3269, "EUR", 27, "NEW"),
+    (5, 159, 3, "Buy", 1, "USD", 20000, "NEW"),
+    (6, 159, 3, "Sell", 2, "USD", 12000, "NEW"),
+    (7, 265, 1, "Buy", 74403, "GBP", 2, "NEW"),
+    (8, 265, 1, "Sell", 74567, "GBP", 6, "NEW"),
+    (9, 265, 1, "Sell", 73987, "GBP", 5, "NEW"),
+    (10, 358, 4, "Buy", 7, "USD", 30000, "NEW"),
+    (11, 358, 4, "Sell", 6, "USD", 25000, "NEW"),
+    (12, 358, 4, "Buy", 6, "USD", 10000, "NEW")
 ]
 
-for order in orders:
-    cur.execute("INSERT INTO orderbook VALUES(?, ?, ?, ?, ?, ?, ?, ?)", order)
+cur.executemany(
+    """
+    INSERT INTO orderbook
+    (id, walletid, cryptoid, side, price, currency, qty, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+    orders
+)
 
+print("\n=== ORDERBOOK ===")
 for row in cur.execute("SELECT * FROM orderbook"):
-    print(f"  - Order: {row}")
+    print(row)
 
-cur.close()
 con.commit()
+cur.close()
 con.close()
 
-print("\nDatabase created successfully!")
-print("Important: Share these passwords with wallet owners securely (not in this script)")
-print("Passwords are now hashed with bcrypt and cannot be recovered - only verified")
+print("\nDatabase succesvol aangemaakt:")
+print(DB_FILE)
