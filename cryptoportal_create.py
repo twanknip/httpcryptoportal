@@ -1,137 +1,249 @@
 #!/usr/bin/python3
 
-import os
+"""
+CryptoPortal Database Creation Script
+Secure initialization with proper constraints and validation
+"""
+
 import sqlite3
 import bcrypt
+import os
+import sys
 
-# Maak de data-map automatisch aan
-os.makedirs("data", exist_ok=True)
+# =====================================================
+# CONFIGURATION
+# =====================================================
 
 DB_FILE = "data/cryptoportal.db"
+DB_BACKUP = "data/cryptoportal.db.backup"
 
-con = sqlite3.connect(DB_FILE)
-cur = con.cursor()
+# Security settings
+BCRYPT_ROUNDS = 12
 
-# =====================================================
-# WALLET TABEL
-# =====================================================
-
-cur.execute("DROP TABLE IF EXISTS wallet")
-
-cur.execute("""
-CREATE TABLE wallet (
-    id INTEGER PRIMARY KEY,
-    pincode TEXT NOT NULL,
-    eigenaar TEXT NOT NULL
-)
-""")
-
-# PINs: 314, 159, 265, 358
-# Bcrypt hashes aanmaken (werk: $2b$12$ voor bcrypt identificatie)
-wallets = [
-    (314, bcrypt.hashpw(b"314", bcrypt.gensalt()).decode(), "Portefeuille 1"),
-    (159, bcrypt.hashpw(b"159", bcrypt.gensalt()).decode(), "Portefeuille 2"),
-    (265, bcrypt.hashpw(b"265", bcrypt.gensalt()).decode(), "Portefeuille 3"),
-    (358, bcrypt.hashpw(b"358", bcrypt.gensalt()).decode(), "Portefeuille 4"),
-]
-
-cur.executemany(
-    "INSERT INTO wallet (id, pincode, eigenaar) VALUES (?, ?, ?)",
-    wallets
-)
-
-print("\n=== PORTEFEUILLES ===")
-for row in cur.execute("SELECT id, eigenaar FROM wallet"):
-    print(f"ID: {row[0]} | {row[1]}")
 
 # =====================================================
-# CRYPTO TABEL
+# DATABASE CREATION
 # =====================================================
 
-cur.execute("DROP TABLE IF EXISTS crypto")
-
-cur.execute("""
-CREATE TABLE crypto (
-    id INTEGER PRIMARY KEY,
-    naam TEXT NOT NULL,
-    symbool TEXT NOT NULL
-)
-""")
-
-cryptos = [
-    (1, "Bitcoin", "BTC"),
-    (2, "Ethereum", "ETH"),
-    (3, "Tether", "USDT"),
-    (4, "USD Coin", "USDC")
-]
-
-cur.executemany(
-    "INSERT INTO crypto (id, naam, symbool) VALUES (?, ?, ?)",
-    cryptos
-)
-
-print("\n=== CRYPTOCURRENCY ===")
-for row in cur.execute("SELECT id, naam, symbool FROM crypto"):
-    print(f"{row[0]}. {row[1]} ({row[2]})")
-
-# =====================================================
-# ORDERBOEK TABEL
-# =====================================================
-
-cur.execute("DROP TABLE IF EXISTS orderbook")
-
-cur.execute("""
-CREATE TABLE orderbook (
-    id INTEGER PRIMARY KEY,
-    walletid INTEGER NOT NULL,
-    cryptoid INTEGER NOT NULL,
-    zijde TEXT NOT NULL,
-    prijs REAL NOT NULL,
-    munteenheid TEXT NOT NULL,
-    hoeveelheid INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    datum_aangemaakt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-    FOREIGN KEY(walletid) REFERENCES wallet(id),
-    FOREIGN KEY(cryptoid) REFERENCES crypto(id)
-)
-""")
-
-orders = [
-    (1, 314, 1, "Koop", 89535, "EUR", 2, "NIEUW"),
-    (2, 314, 1, "Verkoop", 89546, "EUR", 2, "NIEUW"),
-    (3, 314, 2, "Koop", 3270, "EUR", 17, "NIEUW"),
-    (4, 159, 2, "Koop", 3269, "EUR", 27, "NIEUW"),
-    (5, 159, 3, "Koop", 1, "USD", 20000, "NIEUW"),
-    (6, 159, 3, "Verkoop", 2, "USD", 12000, "NIEUW"),
-    (7, 265, 1, "Koop", 74403, "GBP", 2, "NIEUW"),
-    (8, 265, 1, "Verkoop", 74567, "GBP", 6, "NIEUW"),
-    (9, 265, 1, "Verkoop", 73987, "GBP", 5, "NIEUW"),
-    (10, 358, 4, "Koop", 7, "USD", 30000, "NIEUW"),
-    (11, 358, 4, "Verkoop", 6, "USD", 25000, "NIEUW"),
-    (12, 358, 4, "Koop", 6, "USD", 10000, "NIEUW")
-]
-
-cur.executemany(
+def create_database():
     """
-    INSERT INTO orderbook
-    (id, walletid, cryptoid, zijde, prijs, munteenheid, hoeveelheid, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-    orders
-)
+    Creates the database schema with security constraints
+    
+    WARNING: This script uses DROP TABLE in development mode.
+    In production, use proper migration tools instead.
+    """
+    
+    # Create data directory if it doesn't exist
+    os.makedirs("data", exist_ok=True)
+    
+    # Backup existing database if it exists (safety measure)
+    if os.path.exists(DB_FILE):
+        print(f"[!] Database exists. Creating backup at {DB_BACKUP}")
+        try:
+            import shutil
+            if os.path.exists(DB_BACKUP):
+                os.remove(DB_BACKUP)
+            shutil.copy2(DB_FILE, DB_BACKUP)
+            print("[+] Backup created successfully")
+        except Exception as e:
+            print(f"[!] Could not create backup: {e}")
+            print("[!] Aborting database creation to prevent data loss")
+            return False
+        
+        # Only drop tables in development (careful!)
+        print("[*] Dropping existing tables...")
+    
+    try:
+        con = sqlite3.connect(DB_FILE)
+        cur = con.cursor()
+        
+        # Enable foreign key constraints
+        cur.execute("PRAGMA foreign_keys = ON")
+        
+        # ===== DROP EXISTING TABLES (DEVELOPMENT ONLY) =====
+        # WARNING: This is destructive. In production, use migrations.
+        print("[*] Creating fresh schema...")
+        cur.execute("DROP TABLE IF EXISTS orderbook")
+        cur.execute("DROP TABLE IF EXISTS crypto")
+        cur.execute("DROP TABLE IF EXISTS wallet")
+        
+        # ===== WALLET TABLE =====
+        cur.execute("""
+            CREATE TABLE wallet (
+                id INTEGER PRIMARY KEY,
+                pincode TEXT NOT NULL,
+                eigenaar TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Add index for faster lookups
+        cur.execute("CREATE INDEX idx_wallet_id ON wallet(id)")
+        
+        print("[+] Created wallet table")
+        
+        # ===== CRYPTO TABLE =====
+        cur.execute("""
+            CREATE TABLE crypto (
+                id INTEGER PRIMARY KEY,
+                naam TEXT NOT NULL UNIQUE,
+                symbool TEXT NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        cur.execute("CREATE INDEX idx_crypto_naam ON crypto(naam)")
+        cur.execute("CREATE INDEX idx_crypto_symbool ON crypto(symbool)")
+        
+        print("[+] Created crypto table")
+        
+        # ===== ORDERBOOK TABLE =====
+        cur.execute("""
+            CREATE TABLE orderbook (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                walletid INTEGER NOT NULL,
+                cryptoid INTEGER NOT NULL,
+                zijde TEXT NOT NULL CHECK (zijde IN ('Koop', 'Verkoop')),
+                prijs REAL NOT NULL CHECK (prijs > 0),
+                munteenheid TEXT NOT NULL CHECK (munteenheid IN ('EUR', 'USD', 'GBP')),
+                hoeveelheid INTEGER NOT NULL CHECK (hoeveelheid > 0),
+                status TEXT NOT NULL DEFAULT 'NIEUW' CHECK (status IN ('NIEUW', 'UITGEVOERD', 'GEANNULEERD')),
+                datum_aangemaakt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (walletid) REFERENCES wallet(id) ON DELETE RESTRICT,
+                FOREIGN KEY (cryptoid) REFERENCES crypto(id) ON DELETE RESTRICT
+            )
+        """)
+        
+        # Add indexes for query performance
+        cur.execute("CREATE INDEX idx_orderbook_walletid ON orderbook(walletid)")
+        cur.execute("CREATE INDEX idx_orderbook_cryptoid ON orderbook(cryptoid)")
+        cur.execute("CREATE INDEX idx_orderbook_datum ON orderbook(datum_aangemaakt)")
+        
+        print("[+] Created orderbook table")
+        
+        # ===== INSERT TEST DATA =====
+        print("\n[*] Populating test data...")
+        
+        # Insert test cryptocurrencies
+        cryptos = [
+            ('Bitcoin', 'BTC'),
+            ('Ethereum', 'ETH'),
+            ('Tether', 'USDT'),
+        ]
+        
+        for naam, symbool in cryptos:
+            try:
+                cur.execute(
+                    "INSERT INTO crypto (naam, symbool) VALUES (?, ?)",
+                    (naam, symbool)
+                )
+                print(f"[+] Inserted {naam} ({symbool})")
+            except sqlite3.IntegrityError:
+                print(f"[!] {naam} already exists, skipping")
+        
+        # Insert test wallets with hashed PINs
+        # WARNING: These are test PINs only. In production, use proper key derivation.
+        test_wallets = [
+            (101, "5678"),  
+            (102, "9012"),
+            (103, "3456"),  
+        ]
+        
+        for wallet_id, pin in test_wallets:
+            try:
+                # Hash the PIN using bcrypt (cost factor 12)
+                pin_hash = bcrypt.hashpw(pin.encode(), bcrypt.gensalt(rounds=BCRYPT_ROUNDS))
+                pin_hash_str = pin_hash.decode()
+                
+                # Use a generic owner name for test data
+                owner_name = f" User {wallet_id}"
+                
+                cur.execute(
+                    "INSERT INTO wallet (id, pincode, eigenaar) VALUES (?, ?, ?)",
+                    (wallet_id, pin_hash_str, owner_name)
+                )
+                print(f"[+] Inserted wallet {wallet_id} (PIN: {pin})")
+            except sqlite3.IntegrityError:
+                print(f"[!] Wallet {wallet_id} already exists, skipping")
+        
+        # Commit changes
+        con.commit()
+        print("\n[+] Database creation successful!")
+        print(f"[+] Database saved to {DB_FILE}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"[!] Error creating database: {e}")
+        con.rollback()
+        return False
+    finally:
+        con.close()
 
-print("\n=== ORDERBOEK ===")
-for row in cur.execute("SELECT id, walletid, zijde, status FROM orderbook"):
-    print(f"Order {row[0]} | Portefeuille {row[1]} | {row[2]} | Status: {row[3]}")
 
-con.commit()
-cur.close()
-con.close()
+# =====================================================
+# VERIFICATION
+# =====================================================
 
-print(f"\nDatabase succesvol aangemaakt: {DB_FILE}")
-print("\nTest PIN-codes:")
-print("  Portefeuille 314: PIN 314")
-print("  Portefeuille 159: PIN 159")
-print("  Portefeuille 265: PIN 265")
-print("  Portefeuille 358: PIN 358")
+def verify_database():
+    """Verifies the database structure is correct"""
+    try:
+        con = sqlite3.connect(DB_FILE)
+        cur = con.cursor()
+        
+        # Check tables exist
+        cur.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name IN ('wallet', 'crypto', 'orderbook')
+        """)
+        tables = [row[0] for row in cur.fetchall()]
+        
+        if len(tables) != 3:
+            print("[!] Not all required tables found")
+            return False
+        
+        print("[+] All required tables exist")
+        
+        # Check wallet count
+        cur.execute("SELECT COUNT(*) FROM wallet")
+        wallet_count = cur.fetchone()[0]
+        print(f"[+] Wallets in database: {wallet_count}")
+        
+        # Check crypto count
+        cur.execute("SELECT COUNT(*) FROM crypto")
+        crypto_count = cur.fetchone()[0]
+        print(f"[+] Cryptocurrencies in database: {crypto_count}")
+        
+        con.close()
+        return True
+        
+    except Exception as e:
+        print(f"[!] Verification failed: {e}")
+        return False
+
+
+# =====================================================
+# MAIN
+# =====================================================
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("CryptoPortal Database Creation Script")
+    print("=" * 60)
+    print()
+    
+    if not create_database():
+        print("\n[!] Database creation failed!")
+        sys.exit(1)
+    
+    print()
+    if verify_database():
+        print("\n[+] Database is ready for use!")
+        print("\n[*] Next steps:")
+        print("    1. Copy www/ directory with HTML and CSS files")
+        print("    2. Run: python3 httpcryptoportal.py")
+        sys.exit(0)
+    else:
+        print("\n[!] Database verification failed!")
+        sys.exit(1)

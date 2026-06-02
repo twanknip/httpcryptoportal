@@ -39,3 +39,23 @@
 2026-06-02 12:12:16,109 - INFO - Uitloggen - sessie: d16fbef5-1825-4358-bec3-5ce586ddd62a
 2026-06-02 12:12:16,415 - INFO - GET / van 127.0.0.1
 2026-06-02 12:12:29,410 - INFO - Inloggen succesvol - Portefeuille: 314, Sessie: 634503ff-36f6-4347-a023-69b1e7f39dcb
+2026-06-02 12:17:12,777 - INFO - Uitloggen - sessie: 634503ff-36f6-4347-a023-69b1e7f39dcb
+2026-06-02 12:17:13,090 - INFO - GET / van 127.0.0.1
+2026-06-02 12:17:25,467 - WARNING - Inlog poging met onbekende walletid: 100
+2026-06-02 12:17:32,816 - WARNING - Inlog poging met onbekende walletid: 100
+2026-06-02 12:17:44,168 - WARNING - Inlog poging met onbekende walletid: 101
+2026-06-02 12:19:02,074 - INFO - Server gestopt
+2026-06-02 12:19:21,517 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 12:19:37,441 - INFO - Inloggen succesvol - Portefeuille: 100, Sessie: 1881087f-ad12-47d3-a706-794665d88725
+2026-06-02 12:49:14,691 - INFO - Server gestopt
+2026-06-02 13:49:28,026 - INFO - CryptoPortal started on http://0.0.0.0:8080
+2026-06-02 13:49:38,389 - WARNING - Failed login attempt from 127.0.0.1
+2026-06-02 13:50:08,702 - INFO - Successful login
+2026-06-02 13:50:12,577 - INFO - Logout
+2026-06-02 13:50:12,641 - INFO - GET / from 127.0.0.1
+2026-06-02 13:50:57,932 - INFO - Server stopped
+2026-06-02 13:51:03,001 - INFO - CryptoPortal started on http://0.0.0.0:8080
+2026-06-02 13:52:43,076 - INFO - Server stopped
+2026-06-02 13:52:46,703 - INFO - CryptoPortal started on http://0.0.0.0:8080
+2026-06-02 13:52:55,554 - WARNING - Failed login attempt from 127.0.0.1
+2026-06-02 13:53:32,243 - INFO - Successful login

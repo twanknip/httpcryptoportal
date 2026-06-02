@@ -8,7 +8,20 @@ import bcrypt
 import uuid
 import json
 import logging
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
+from collections import defaultdict
+import time
+
+# =====================================================
+# SECURITY CONSTANTS
+# =====================================================
+
+LOGIN_ATTEMPTS = defaultdict(list)
+MAX_ATTEMPTS = 5
+BLOCK_TIME = 300
+CLEANUP_INTERVAL = 300  # Clean expired sessions every 5 minutes
+LAST_CLEANUP = time.time()
 
 # =====================================================
 # CONFIGURATIE
@@ -19,8 +32,13 @@ DB_FILE = "data/cryptoportal.db"
 HOST = "0.0.0.0"
 PORT = 8080
 SESSION_TIMEOUT = 3600  # 1 uur
+SESSION_ROTATION_TIME = 1800  # Rotate session every 30 minutes
 
-# Logging instellen
+# Allowed enums for input validation
+ALLOWED_SIDES = {"Koop", "Verkoop"}
+ALLOWED_CURRENCIES = {"EUR", "USD", "GBP"}
+
+# Logging setup
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
@@ -28,14 +46,108 @@ logging.basicConfig(
 )
 
 # =====================================================
-# SESSIES
+# SESSIONS
 # =====================================================
 
-SESSIONS = {}  # session_id -> {'walletid': id, 'timestamp': tijd}
+SESSIONS = {}  # session_id -> {
+               #   'walletid': id,
+               #   'timestamp': time,
+               #   'ip': ip_address,
+               #   'csrf_token': token,
+               #   'rotated_at': time
+               # }
+
+CSRF_TOKENS = {}  # csrf_token -> expiration_time
 
 
 # =====================================================
-# DATABASE FUNCTIES
+# SESSION MANAGEMENT
+# =====================================================
+
+def cleanup_expired_sessions():
+    """Removes expired sessions periodically"""
+    global LAST_CLEANUP
+    now = time.time()
+    
+    if now - LAST_CLEANUP < CLEANUP_INTERVAL:
+        return
+    
+    expired = [
+        sid for sid, data in SESSIONS.items()
+        if (now - data['timestamp'].timestamp()) > SESSION_TIMEOUT
+    ]
+    
+    for sid in expired:
+        SESSIONS.pop(sid, None)
+        logging.info(f"Session expired and cleaned: {sid[:8]}...")
+    
+    LAST_CLEANUP = now
+
+
+def is_session_valid(session_data, current_ip):
+    """Validates session expiration and IP binding"""
+    if not session_data:
+        return False
+    
+    elapsed = (datetime.now() - session_data['timestamp']).total_seconds()
+    
+    # Check expiration
+    if elapsed > SESSION_TIMEOUT:
+        return False
+    
+    # Check IP binding (prevent session hijacking)
+    if session_data.get('ip') != current_ip:
+        return False
+    
+    return True
+
+
+def create_session(walletid, ip_address):
+    """Creates a new secure session"""
+    sid = str(uuid.uuid4())
+    csrf_token = secrets.token_urlsafe(32)
+    
+    SESSIONS[sid] = {
+        'walletid': walletid,
+        'timestamp': datetime.now(),
+        'ip': ip_address,
+        'csrf_token': csrf_token,
+        'rotated_at': datetime.now()
+    }
+    
+    CSRF_TOKENS[csrf_token] = datetime.now() + timedelta(hours=1)
+    
+    return sid, csrf_token
+
+
+def rotate_session(session_id, ip_address):
+    """Rotates session token (called periodically or on sensitive actions)"""
+    if session_id not in SESSIONS:
+        return None
+    
+    session_data = SESSIONS[session_id]
+    elapsed = (datetime.now() - session_data['rotated_at']).total_seconds()
+    
+    if elapsed > SESSION_ROTATION_TIME:
+        new_sid = str(uuid.uuid4())
+        new_csrf_token = secrets.token_urlsafe(32)
+        
+        session_data['rotated_at'] = datetime.now()
+        session_data['timestamp'] = datetime.now()  # Refresh timestamp too
+        
+        SESSIONS[new_sid] = session_data
+        CSRF_TOKENS[new_csrf_token] = datetime.now() + timedelta(hours=1)
+        
+        SESSIONS.pop(session_id, None)
+        logging.info(f"Session rotated: {session_id[:8]}...")
+        
+        return new_sid, new_csrf_token
+    
+    return session_id, session_data['csrf_token']
+
+
+# =====================================================
+# DATABASE FUNCTIONS
 # =====================================================
 
 def get_db():
@@ -46,121 +158,257 @@ def get_db():
 
 def get_wallet_by_id(walletid):
     """Haalt portefeuille gegevens op"""
-    con = get_db()
-    cur = con.cursor()
-    result = cur.execute(
-        "SELECT id, eigenaar FROM wallet WHERE id = ?",
-        (walletid,)
-    ).fetchone()
-    con.close()
-    return result
+    try:
+        if not isinstance(walletid, int) or walletid < 0:
+            return None
+        
+        con = get_db()
+        cur = con.cursor()
+        result = cur.execute(
+            "SELECT id, eigenaar FROM wallet WHERE id = ?",
+            (walletid,)
+        ).fetchone()
+        con.close()
+        return result
+    except Exception as e:
+        logging.error(f"Database error in get_wallet_by_id: {type(e).__name__}")
+        return None
 
 
 def verify_pin(walletid, pin):
     """Verifieert PIN met bcrypt"""
-    con = get_db()
-    cur = con.cursor()
-    result = cur.execute(
-        "SELECT pincode FROM wallet WHERE id = ?",
-        (walletid,)
-    ).fetchone()
-    con.close()
-
-    if not result:
-        return False
-
     try:
+        if not isinstance(walletid, int) or walletid < 0:
+            return False
+        
+        if not isinstance(pin, str) or len(pin) == 0:
+            return False
+        
+        con = get_db()
+        cur = con.cursor()
+        result = cur.execute(
+            "SELECT pincode FROM wallet WHERE id = ?",
+            (walletid,)
+        ).fetchone()
+        con.close()
+
+        if not result:
+            return False
+
+        # Constant-time comparison to prevent timing attacks
         return bcrypt.checkpw(pin.encode(), result[0].encode())
     except Exception as e:
-        logging.error(f"PIN verificatie fout: {e}")
+        logging.error(f"PIN verification error: {type(e).__name__}")
         return False
 
 
 def get_crypto_list():
     """Haalt alle beschikbare cryptocurrencies op"""
-    con = get_db()
-    cur = con.cursor()
-    result = cur.execute(
-        "SELECT id, naam, symbool FROM crypto ORDER BY id"
-    ).fetchall()
-    con.close()
-    return result
+    try:
+        con = get_db()
+        cur = con.cursor()
+        result = cur.execute(
+            "SELECT id, naam, symbool FROM crypto ORDER BY id"
+        ).fetchall()
+        con.close()
+        return result
+    except Exception as e:
+        logging.error(f"Database error in get_crypto_list: {type(e).__name__}")
+        return []
+
+
+def get_crypto_by_id(cryptoid):
+    """Haalt cryptocurrency op en valideert deze bestaat"""
+    try:
+        if not isinstance(cryptoid, int) or cryptoid < 0:
+            return None
+        
+        con = get_db()
+        cur = con.cursor()
+        result = cur.execute(
+            "SELECT id, naam, symbool FROM crypto WHERE id = ?",
+            (cryptoid,)
+        ).fetchone()
+        con.close()
+        return result
+    except Exception as e:
+        logging.error(f"Database error in get_crypto_by_id: {type(e).__name__}")
+        return None
 
 
 def get_wallet_orders(walletid):
     """Haalt alle orders voor een portefeuille op"""
-    con = get_db()
-    cur = con.cursor()
-    result = cur.execute("""
-        SELECT 
-            o.id, 
-            c.naam, 
-            c.symbool,
-            o.zijde, 
-            o.prijs, 
-            o.munteenheid, 
-            o.hoeveelheid, 
-            o.status,
-            o.datum_aangemaakt
-        FROM orderbook o
-        JOIN crypto c ON o.cryptoid = c.id
-        WHERE o.walletid = ?
-        ORDER BY o.id DESC
-    """, (walletid,)).fetchall()
-    con.close()
-    return result
+    try:
+        if not isinstance(walletid, int) or walletid < 0:
+            return []
+        
+        con = get_db()
+        cur = con.cursor()
+        result = cur.execute("""
+            SELECT 
+                o.id, 
+                c.naam, 
+                c.symbool,
+                o.zijde, 
+                o.prijs, 
+                o.munteenheid, 
+                o.hoeveelheid, 
+                o.status,
+                o.datum_aangemaakt
+            FROM orderbook o
+            JOIN crypto c ON o.cryptoid = c.id
+            WHERE o.walletid = ?
+            ORDER BY o.id DESC
+        """, (walletid,)).fetchall()
+        con.close()
+        return result
+    except Exception as e:
+        logging.error(f"Database error in get_wallet_orders: {type(e).__name__}")
+        return []
 
 
 def create_order(walletid, cryptoid, zijde, prijs, munteenheid, hoeveelheid):
-    """Maakt een nieuwe order aan"""
-    con = get_db()
-    cur = con.cursor()
+    """Maakt een nieuwe order aan met strikte validatie"""
     try:
+        # Strict input validation
+        if not isinstance(walletid, int) or walletid < 0:
+            return False
+        
+        if not isinstance(cryptoid, int) or cryptoid < 0:
+            return False
+        
+        if zijde not in ALLOWED_SIDES:
+            logging.warning(f"Invalid side attempted: {zijde}")
+            return False
+        
+        if munteenheid not in ALLOWED_CURRENCIES:
+            logging.warning(f"Invalid currency attempted: {munteenheid}")
+            return False
+        
+        if not isinstance(prijs, (int, float)) or prijs <= 0:
+            return False
+        
+        if not isinstance(hoeveelheid, int) or hoeveelheid <= 0:
+            return False
+        
+        # Verify crypto exists
+        if not get_crypto_by_id(cryptoid):
+            return False
+        
+        con = get_db()
+        cur = con.cursor()
         cur.execute("""
             INSERT INTO orderbook 
             (walletid, cryptoid, zijde, prijs, munteenheid, hoeveelheid, status)
             VALUES (?, ?, ?, ?, ?, ?, 'NIEUW')
         """, (walletid, cryptoid, zijde, prijs, munteenheid, hoeveelheid))
         con.commit()
-        logging.info(f"Order aangemaakt - Portefeuille: {walletid}, Crypto: {cryptoid}")
+        con.close()
+        
+        logging.info(f"Order created - Wallet: {walletid}, Crypto: {cryptoid}")
         return True
     except Exception as e:
-        logging.error(f"Fout bij orderaanmaak: {e}")
+        logging.error(f"Error creating order: {type(e).__name__}")
         return False
-    finally:
-        con.close()
 
 
 # =====================================================
-# HELPER FUNCTIES
+# HELPER FUNCTIONS
 # =====================================================
+
+def is_blocked(ip, walletid):
+    """Check if IP is blocked due to too many failed login attempts"""
+    try:
+        if not isinstance(walletid, int):
+            return True
+        
+        key = (ip, walletid)
+        attempts = LOGIN_ATTEMPTS[key]
+        
+        # Remove old attempts
+        now = time.time()
+        attempts[:] = [t for t in attempts if now - t < BLOCK_TIME]
+        
+        return len(attempts) >= MAX_ATTEMPTS
+    except Exception as e:
+        logging.error(f"Error in is_blocked: {type(e).__name__}")
+        return True
+
+
+def register_failed_attempt(ip, walletid):
+    """Register a failed login attempt"""
+    try:
+        if isinstance(walletid, int):
+            key = (ip, walletid)
+            LOGIN_ATTEMPTS[key].append(time.time())
+            logging.warning(f"Failed login attempt from {ip}")
+    except Exception:
+        pass
+
 
 def read_post_data(handler):
-    """Leest POST data uit request"""
+    """Leest POST data uit request met size limit"""
     try:
         length = int(handler.headers.get("Content-Length", 0))
-        body = handler.rfile.read(length).decode()
+        if length > 4096:  # Prevent large POST attacks
+            return {}
+        body = handler.rfile.read(length).decode('utf-8', errors='ignore')
         return urllib.parse.parse_qs(body)
     except Exception as e:
-        logging.error(f"POST data lees fout: {e}")
+        logging.error(f"POST data read error: {type(e).__name__}")
         return {}
 
 
 def get_session(handler):
-    """Haalt session ID uit cookie"""
-    cookie = handler.headers.get("Cookie", "")
-    for part in cookie.split(";"):
-        if "sessie=" in part:
-            sid = part.split("=")[1].strip()
-            if sid in SESSIONS:
-                return SESSIONS[sid].get('walletid')
+    """Haalt session ID uit cookie en valideert deze"""
+    try:
+        cleanup_expired_sessions()
+        
+        cookie = handler.headers.get("Cookie", "")
+        for part in cookie.split(";"):
+            if "sessie=" in part:
+                sid = part.split("=")[1].strip()
+                if sid in SESSIONS:
+                    session_data = SESSIONS[sid]
+                    if is_session_valid(session_data, handler.client_address[0]):
+                        return session_data['walletid']
+                    else:
+                        # Invalid session - remove it
+                        SESSIONS.pop(sid, None)
+    except Exception as e:
+        logging.error(f"Session validation error: {type(e).__name__}")
+    
     return None
 
 
+def validate_csrf_token(data):
+    """Validates CSRF token from POST data"""
+    try:
+        token = data.get("csrf_token", [""])[0]
+        
+        if not token or token not in CSRF_TOKENS:
+            return False
+        
+        # Check if token has expired
+        if datetime.now() > CSRF_TOKENS[token]:
+            CSRF_TOKENS.pop(token, None)
+            return False
+        
+        # Consume token (one-time use)
+        CSRF_TOKENS.pop(token, None)
+        return True
+    except Exception:
+        return False
+
+
 def send_html_response(handler, status_code, html_content):
-    """Stuurt HTML response"""
+    """Stuurt HTML response met security headers"""
     handler.send_response(status_code)
     handler.send_header("Content-type", "text/html; charset=utf-8")
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    handler.send_header("X-Frame-Options", "DENY")
+    handler.send_header("X-XSS-Protection", "1; mode=block")
+    handler.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
     handler.end_headers()
     handler.wfile.write(html_content.encode("utf-8"))
 
@@ -168,9 +416,12 @@ def send_html_response(handler, status_code, html_content):
 def send_redirect(handler, location, session_id=None):
     """Stuurt redirect response"""
     handler.send_response(302)
+    handler.send_header("X-Content-Type-Options", "nosniff")
+    
     if session_id:
         handler.send_header("Set-Cookie", 
-            f"sessie={session_id}; HttpOnly; SameSite=Strict; Path=/")
+            f"sessie={session_id}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={SESSION_TIMEOUT}")
+    
     handler.send_header("Location", location)
     handler.end_headers()
 
@@ -187,6 +438,8 @@ def get_page_header():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'">
         <title>CryptoPortal</title>
         <link rel="stylesheet" href="/style.css">
     </head>
@@ -202,6 +455,11 @@ def get_page_footer():
     </body>
     </html>
     """
+
+
+def get_csrf_field(csrf_token):
+    """Returns HTML hidden field with CSRF token"""
+    return f'<input type="hidden" name="csrf_token" value="{html_escape(csrf_token)}">'
 
 
 # =====================================================
@@ -228,6 +486,7 @@ class Handler(BaseHTTPRequestHandler):
                     mime_type = "text/css" if path.endswith(".css") else "text/html; charset=utf-8"
                     self.send_response(200)
                     self.send_header("Content-type", mime_type)
+                    self.send_header("X-Content-Type-Options", "nosniff")
                     self.end_headers()
                     self.wfile.write(content)
                     return
@@ -266,7 +525,7 @@ class Handler(BaseHTTPRequestHandler):
             </div>
             """
             html += get_page_footer()
-            logging.info(f"GET / van {self.client_address[0]}")
+            logging.info(f"GET / from {self.client_address[0]}")
             send_html_response(self, 200, html)
             return
 
@@ -277,13 +536,17 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             wallet = get_wallet_by_id(walletid)
+            if not wallet:
+                send_redirect(self, "/inloggen")
+                return
+
             orders = get_wallet_orders(walletid)
 
             html = get_page_header()
             html += f"""
             <div class="header">
                 <h1>CryptoPortal</h1>
-                <p class="subtitle">Portefeuille {walletid}</p>
+                <p class="subtitle">Portefeuille {html_escape(str(walletid))}</p>
             </div>
 
             <div class="breadcrumb">
@@ -310,15 +573,15 @@ class Handler(BaseHTTPRequestHandler):
                 <tbody>
                 """
                 for order in orders:
-                    status_class = "status-" + order[7].lower().replace(" ", "-")
+                    status_class = "status-" + html_escape(order[7]).lower().replace(" ", "-")
                     html += f"""
                     <tr>
-                        <td class="order-id">{order[0]}</td>
-                        <td>{order[1]} ({order[2]})</td>
-                        <td><span class="badge {('badge-buy' if order[3] == 'Koop' else 'badge-sell')}">{order[3]}</span></td>
-                        <td>{order[4]} {order[5]}</td>
-                        <td>{order[6]}</td>
-                        <td><span class="{status_class}">{order[7]}</span></td>
+                        <td class="order-id">{html_escape(str(order[0]))}</td>
+                        <td>{html_escape(order[1])} ({html_escape(order[2])})</td>
+                        <td><span class="badge {('badge-buy' if order[3] == 'Koop' else 'badge-sell')}">{html_escape(order[3])}</span></td>
+                        <td>{html_escape(str(order[4]))} {html_escape(order[5])}</td>
+                        <td>{html_escape(str(order[6]))}</td>
+                        <td><span class="{status_class}">{html_escape(order[7])}</span></td>
                     </tr>
                     """
                 html += "</tbody></table>"
@@ -339,7 +602,18 @@ class Handler(BaseHTTPRequestHandler):
 
         # --------- INLOGGEN (REDIRECT) ---------
         if path == "/inloggen":
-            redirect = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('redirect', ['/orders'])[0]
+            try:
+                redirect = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('redirect', ['/orders'])[0]
+                # Validate redirect URL (prevent open redirect)
+                if not redirect.startswith('/'):
+                    redirect = '/orders'
+            except:
+                redirect = '/orders'
+            
+            # Generate new CSRF token for this request
+            csrf_token = secrets.token_urlsafe(32)
+            CSRF_TOKENS[csrf_token] = datetime.now() + timedelta(hours=1)
+            
             html = get_page_header()
             html += f"""
             <div class="header">
@@ -350,7 +624,8 @@ class Handler(BaseHTTPRequestHandler):
             <div class="login-box">
                 <h2>Portefeuille Toegang</h2>
                 <p class="login-hint">Voer je portefeuille-ID en PIN in</p>
-                <form method="POST" action="/inloggen">
+                <form method="POST" action="/inloggen" class="login-form">
+                    {get_csrf_field(csrf_token)}
                     <input type="hidden" name="redirect" value="{html_escape(redirect)}">
                     
                     <div class="form-group">
@@ -360,9 +635,9 @@ class Handler(BaseHTTPRequestHandler):
                             id="walletid"
                             name="walletid" 
                             required 
-                            placeholder="bijv. "
-                            min="100"
-                            max="999"
+                             placeholder="bijv.100"  "
+                            min="1"
+                            max="999999"
                         >
                     </div>
 
@@ -374,15 +649,13 @@ class Handler(BaseHTTPRequestHandler):
                             name="pin" 
                             required 
                             placeholder="Vul je PIN in"
-                            maxlength="6"
+                            maxlength="20"
                         >
                     </div>
 
                     <button type="submit" class="btn btn-primary full-width">Inloggen</button>
                 </form>
             </div>
-
-           
             """
             html += get_page_footer()
             send_html_response(self, 200, html)
@@ -395,12 +668,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             wallet = get_wallet_by_id(walletid)
+            if not wallet:
+                send_redirect(self, "/inloggen")
+                return
+
             cryptos = get_crypto_list()
 
             crypto_options = "".join([
-                f'<option value="{c[0]}">{c[1]} ({c[2]})</option>'
+                f'<option value="{html_escape(str(c[0]))}">{html_escape(c[1])} ({html_escape(c[2])})</option>'
                 for c in cryptos
             ])
+
+            # Generate CSRF token
+            csrf_token = secrets.token_urlsafe(32)
+            CSRF_TOKENS[csrf_token] = datetime.now() + timedelta(hours=1)
 
             html = get_page_header()
             html += f"""
@@ -415,9 +696,11 @@ class Handler(BaseHTTPRequestHandler):
 
             <div class="order-form-section">
                 <h2>Order Details</h2>
-                <p class="wallet-info">Portefeuille: <strong>{wallet[0]}</strong> | {wallet[1]}</p>
+                <p class="wallet-info">Portefeuille: <strong>{html_escape(str(wallet[0]))}</strong> | {html_escape(wallet[1])}</p>
 
                 <form method="POST" action="/order-nieuw" class="order-form">
+                    {get_csrf_field(csrf_token)}
+                    
                     <div class="form-group">
                         <label for="cryptoid">Cryptocurrency</label>
                         <select id="cryptoid" name="cryptoid" required>
@@ -455,6 +738,7 @@ class Handler(BaseHTTPRequestHandler):
                                 required 
                                 step="0.01"
                                 min="0.01"
+                                max="999999.99"
                                 placeholder="0.00"
                             >
                         </div>
@@ -468,6 +752,7 @@ class Handler(BaseHTTPRequestHandler):
                                 required 
                                 step="1"
                                 min="1"
+                                max="999999"
                                 placeholder="0"
                             >
                         </div>
@@ -488,9 +773,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/uitloggen":
             cookie = self.headers.get("Cookie", "")
             if "sessie=" in cookie:
-                sid = cookie.split("sessie=")[1].split(";")[0]
-                SESSIONS.pop(sid, None)
-                logging.info(f"Uitloggen - sessie: {sid}")
+                try:
+                    sid = cookie.split("sessie=")[1].split(";")[0]
+                    SESSIONS.pop(sid, None)
+                    logging.info(f"Logout")
+                except:
+                    pass
 
             send_redirect(self, "/")
             return
@@ -507,47 +795,64 @@ class Handler(BaseHTTPRequestHandler):
         html += get_page_footer()
         send_html_response(self, 404, html)
 
-    # ===== POST =====
+# ===== POST =====
     def do_POST(self):
         """Verwerkt POST requests"""
         path = urllib.parse.urlparse(self.path).path
         data = read_post_data(self)
+        ip = self.client_address[0]
 
         # --------- INLOGGEN ---------
         if path == "/inloggen":
+            # Validate CSRF token
+            if not validate_csrf_token(data):
+                logging.warning(f"CSRF token validation failed for login from {ip}")
+                send_redirect(self, "/inloggen?error=csrf")
+                return
+
             walletid_str = data.get("walletid", [""])[0]
             pin = data.get("pin", [""])[0]
             redirect = data.get("redirect", ["/orders"])[0]
 
+            # Validate redirect URL
+            if not redirect.startswith('/'):
+                redirect = '/orders'
+
             if not walletid_str or not pin:
-                logging.warning(f"Inlog poging zonder walletid/pin van {self.client_address[0]}")
-                send_redirect(self, f"/inloggen?redirect={redirect}&error=1")
+                logging.warning(f"Login attempt without walletid/pin from {ip}")
+                send_redirect(self, f"/inloggen?redirect={urllib.parse.quote(redirect)}&error=1")
                 return
 
             try:
                 walletid = int(walletid_str)
             except ValueError:
-                logging.warning(f"Ongeldige walletid: {walletid_str}")
-                send_redirect(self, f"/inloggen?redirect={redirect}&error=1")
+                logging.warning(f"Invalid walletid format from {ip}")
+                send_redirect(self, f"/inloggen?redirect={urllib.parse.quote(redirect)}&error=1")
+                return
+
+            # =====================================================
+            # BRUTE FORCE PROTECTION
+            # =====================================================
+
+            if is_blocked(ip, walletid):
+                logging.warning(f"Blocked login attempt from {ip}")
+                send_redirect(self, "/inloggen?error=blocked")
                 return
 
             if not get_wallet_by_id(walletid):
-                logging.warning(f"Inlog poging met onbekende walletid: {walletid}")
-                send_redirect(self, f"/inloggen?redirect={redirect}&error=1")
+                register_failed_attempt(ip, walletid)
+                send_redirect(self, f"/inloggen?redirect={urllib.parse.quote(redirect)}&error=1")
                 return
 
             if not verify_pin(walletid, pin):
-                logging.warning(f"Ongeldige PIN voor walletid {walletid} van {self.client_address[0]}")
-                send_redirect(self, f"/inloggen?redirect={redirect}&error=2")
+                register_failed_attempt(ip, walletid)
+                send_redirect(self, f"/inloggen?redirect={urllib.parse.quote(redirect)}&error=2")
                 return
 
-            # PIN juist - sessie aanmaken
-            sid = str(uuid.uuid4())
-            SESSIONS[sid] = {
-                'walletid': walletid,
-                'timestamp': datetime.now()
-            }
-            logging.info(f"Inloggen succesvol - Portefeuille: {walletid}, Sessie: {sid}")
+            # --------- SUCCESVOLLE LOGIN ---------
+            sid, csrf_token = create_session(walletid, ip)
+            
+            logging.info(f"Successful login")
 
             send_redirect(self, redirect, session_id=sid)
             return
@@ -560,14 +865,20 @@ class Handler(BaseHTTPRequestHandler):
                 send_redirect(self, "/inloggen?redirect=/order-nieuw")
                 return
 
+            # Validate CSRF token
+            if not validate_csrf_token(data):
+                logging.warning(f"CSRF token validation failed for order from user {walletid}")
+                send_redirect(self, "/order-nieuw?error=csrf")
+                return
+
             try:
                 cryptoid = int(data.get("cryptoid", ["1"])[0])
-                zijde = data.get("zijde", ["Koop"])[0]
+                zijde = data.get("zijde", ["Koop"])[0].strip()
                 prijs = float(data.get("prijs", ["0"])[0])
-                munteenheid = data.get("munteenheid", ["EUR"])[0]
+                munteenheid = data.get("munteenheid", ["EUR"])[0].strip()
                 hoeveelheid = int(data.get("hoeveelheid", ["0"])[0])
 
-                # Validatie
+                # Strict validation
                 if prijs <= 0 or hoeveelheid <= 0:
                     raise ValueError("Prijs en hoeveelheid moeten groter zijn dan 0")
 
@@ -576,7 +887,7 @@ class Handler(BaseHTTPRequestHandler):
                     return
 
             except (ValueError, TypeError) as e:
-                logging.error(f"Fout bij orderaanmaak: {e}")
+                logging.error(f"Order creation error: {type(e).__name__}")
 
             send_redirect(self, "/order-nieuw?error=1")
             return
@@ -591,11 +902,11 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     httpd = HTTPServer((HOST, PORT), Handler)
-    logging.info(f"CryptoPortal gestart op http://{HOST}:{PORT}")
-    print(f"CryptoPortal draait op http://localhost:{PORT}")
-    print("Druk Ctrl+C om af te sluiten")
+    logging.info(f"CryptoPortal started on http://{HOST}:{PORT}")
+    print(f"CryptoPortal running on http://localhost:{PORT}")
+    print("Press Ctrl+C to stop")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        logging.info("Server gestopt")
-        print("\nServer gestopt")
+        logging.info("Server stopped")
+        print("\nServer stopped")
