@@ -1,25 +1,72 @@
 <!DOCTYPE html>
-<html>
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>CryptoPortal</title>
-        <link rel="stylesheet" href="/style.css">
-    </head>
-    <body background="cryptoportal.jpeg">
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoPortal - Mijn Orders</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+
+<div class="container">
+    <div class="header">
         <h1>CryptoPortal</h1>
-        <hr>
-    	<form method='GET' action='/orderview'>
-            <label>Wallet ID <i>(3-digit PIN)</i></label>:&nbsp;<input type='number' name='walletid'></input>&nbsp;
-            <input type='submit' value='View'></input>
-        </form>
-        <hr>
-        <div><i>Orders for __WALLETID__</i></div>
-        <br>
-        __ORDERS__
-        <hr>
-        <div>Click <a href="/">here</a> for the main page</div>
-        <div>Click <a href="/orderview">here</a> to view orders</div>
-        <div>Click <a href="/orderenter">here</a> to enter orders</div>
-    </body>
+        <p class="subtitle">Mijn Orders</p>
+    </div>
+
+    <div class="breadcrumb">
+        <a href="/">Home</a> / Mijn Orders
+    </div>
+
+    <div class="orders-section">
+        <h2>Orders</h2>
+
+        <table class="orders-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Asset</th>
+                    <th>Type</th>
+                    <th>Prijs</th>
+                    <th>Hoeveelheid</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="order-id">1</td>
+                    <td>Bitcoin (BTC)</td>
+                    <td><span class="badge badge-buy">Koop</span></td>
+                    <td>89535 EUR</td>
+                    <td>2</td>
+                    <td><span class="status-nieuw">NIEUW</span></td>
+                </tr>
+                <tr>
+                    <td class="order-id">2</td>
+                    <td>Bitcoin (BTC)</td>
+                    <td><span class="badge badge-sell">Verkoop</span></td>
+                    <td>89546 EUR</td>
+                    <td>2</td>
+                    <td><span class="status-nieuw">NIEUW</span></td>
+                </tr>
+                <tr>
+                    <td class="order-id">3</td>
+                    <td>Ethereum (ETH)</td>
+                    <td><span class="badge badge-buy">Koop</span></td>
+                    <td>3270 EUR</td>
+                    <td>17</td>
+                    <td><span class="status-nieuw">NIEUW</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="action-links">
+        <a href="/order-nieuw" class="btn btn-primary">Nieuwe Order</a>
+        <a href="/uitloggen" class="btn btn-danger">Uitloggen</a>
+    </div>
+</div>
+
+</body>
 </html>

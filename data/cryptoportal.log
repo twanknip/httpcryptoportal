@@ -1,0 +1,41 @@
+2026-06-02 11:32:52,576 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:32:58,109 - INFO - GET / van 127.0.0.1
+2026-06-02 11:36:35,453 - INFO - Server gestopt
+2026-06-02 11:40:21,104 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:40:28,006 - INFO - GET / van 127.0.0.1
+2026-06-02 11:40:47,200 - INFO - GET / van 127.0.0.1
+2026-06-02 11:43:04,998 - INFO - GET / van 127.0.0.1
+2026-06-02 11:43:06,281 - INFO - Server gestopt
+2026-06-02 11:43:26,243 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:43:29,975 - INFO - GET / van 127.0.0.1
+2026-06-02 11:44:30,565 - INFO - GET / van 127.0.0.1
+2026-06-02 11:46:27,346 - INFO - GET / van 127.0.0.1
+2026-06-02 11:46:32,387 - INFO - Server gestopt
+2026-06-02 11:46:37,814 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:46:42,436 - INFO - GET / van 127.0.0.1
+2026-06-02 11:48:36,491 - INFO - GET / van 127.0.0.1
+2026-06-02 11:48:37,215 - INFO - GET / van 127.0.0.1
+2026-06-02 11:49:38,641 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:49:39,326 - INFO - GET / van 127.0.0.1
+2026-06-02 11:50:37,645 - INFO - Server gestopt
+2026-06-02 11:50:44,057 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 11:51:22,757 - INFO - Inloggen succesvol - Portefeuille: 314, Sessie: 4df18100-fd91-460c-8ca4-a6c830e5f89c
+2026-06-02 11:51:42,979 - INFO - Order aangemaakt - Portefeuille: 314, Crypto: 1
+2026-06-02 11:51:50,300 - INFO - Uitloggen - sessie: 4df18100-fd91-460c-8ca4-a6c830e5f89c
+2026-06-02 11:51:50,613 - INFO - GET / van 127.0.0.1
+2026-06-02 11:52:03,721 - INFO - Inloggen succesvol - Portefeuille: 314, Sessie: e48712ad-4f40-4d38-9848-674892940a27
+2026-06-02 11:52:08,032 - INFO - Uitloggen - sessie: e48712ad-4f40-4d38-9848-674892940a27
+2026-06-02 11:52:08,347 - INFO - GET / van 127.0.0.1
+2026-06-02 11:52:19,161 - INFO - Uitloggen - sessie: e48712ad-4f40-4d38-9848-674892940a27
+2026-06-02 11:52:19,472 - INFO - GET / van 127.0.0.1
+2026-06-02 12:05:51,554 - INFO - GET / van 127.0.0.1
+2026-06-02 12:05:53,973 - INFO - GET / van 127.0.0.1
+2026-06-02 12:10:25,076 - WARNING - Ongeldige PIN voor walletid 314 van 127.0.0.1
+2026-06-02 12:10:32,052 - INFO - Server gestopt
+2026-06-02 12:11:07,318 - INFO - CryptoPortal gestart op http://0.0.0.0:8080
+2026-06-02 12:11:09,405 - INFO - GET / van 127.0.0.1
+2026-06-02 12:11:37,028 - WARNING - Ongeldige PIN voor walletid 314 van 127.0.0.1
+2026-06-02 12:12:11,542 - INFO - Inloggen succesvol - Portefeuille: 159, Sessie: d16fbef5-1825-4358-bec3-5ce586ddd62a
+2026-06-02 12:12:16,109 - INFO - Uitloggen - sessie: d16fbef5-1825-4358-bec3-5ce586ddd62a
+2026-06-02 12:12:16,415 - INFO - GET / van 127.0.0.1
+2026-06-02 12:12:29,410 - INFO - Inloggen succesvol - Portefeuille: 314, Sessie: 634503ff-36f6-4347-a023-69b1e7f39dcb

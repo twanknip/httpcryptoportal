@@ -1,108 +1,516 @@
-/* -------------------------
-   GLOBAL
-------------------------- */
-body {
-    margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    background: linear-gradient(135deg, #0f172a, #1e293b);
-    color: #e2e8f0;
+/* =====================================================
+   CRYPTOPORTAL - MODERN STYLING
+   ===================================================== */
+
+/* --------- VARIABELEN --------- */
+:root {
+    --primary: #00d4ff;
+    --primary-dark: #0099cc;
+    --secondary: #1a1a2e;
+    --accent: #16c784;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --success: #10b981;
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    --transition: all 0.3s ease;
 }
 
-/* -------------------------
-   HEADER
-------------------------- */
+/* --------- GLOBAL --------- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, var(--bg-dark) 0%, #1a2332 100%);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* --------- CONTAINER --------- */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* --------- HEADER --------- */
 .header {
     text-align: center;
-    padding: 40px 20px;
-    background: rgba(0,0,0,0.3);
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding: 60px 20px 40px;
+    background: linear-gradient(180deg, rgba(0, 212, 255, 0.1) 0%, transparent 100%);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
 }
 
 .header h1 {
-    margin: 0;
-    font-size: 42px;
-    color: #38bdf8;
+    font-size: 3.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), #00aaff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
 }
 
 .subtitle {
-    margin-top: 8px;
-    color: #94a3b8;
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    font-weight: 300;
+    letter-spacing: 0.5px;
 }
 
-/* -------------------------
-   CONTAINER
-------------------------- */
-.container {
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 20px;
+/* --------- BREADCRUMB --------- */
+.breadcrumb {
+    margin-bottom: 30px;
+    padding: 0 0 15px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.95rem;
+    color: var(--text-muted);
 }
 
-/* -------------------------
-   CARD DESIGN
-------------------------- */
-.card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+.breadcrumb a {
+    color: var(--primary);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.breadcrumb a:hover {
+    color: var(--primary-dark);
+}
+
+/* --------- WELCOME BOX --------- */
+.welcome-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 20px;
+    padding: 40px;
+    margin-bottom: 30px;
+    text-align: center;
     backdrop-filter: blur(10px);
 }
 
-.card h2, .card h3 {
-    margin-top: 0;
-    color: #f1f5f9;
+.welcome-box h2 {
+    color: var(--primary);
+    margin-bottom: 15px;
+    font-size: 2rem;
 }
 
-/* -------------------------
-   NAVIGATION BUTTONS
-------------------------- */
-.nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+.welcome-box p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
 }
 
-.nav a {
-    text-decoration: none;
-    padding: 10px 15px;
+/* --------- INFO BOX --------- */
+.info-box {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(0, 212, 255, 0.1));
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--success);
     border-radius: 8px;
-    background: #2563eb;
+    padding: 20px;
+    margin-top: 30px;
+    color: var(--text-secondary);
+}
+
+.info-box p {
+    margin: 0;
+}
+
+.info-box strong {
+    color: var(--primary);
+}
+
+/* --------- BUTTONS --------- */
+.btn {
+    display: inline-block;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), #00aaff);
+    color: var(--bg-dark);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 15px 35px rgba(0, 212, 255, 0.3);
+}
+
+.btn-secondary {
+    background: var(--bg-card);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+}
+
+.btn-secondary:hover {
+    background: var(--primary);
+    color: var(--bg-dark);
+}
+
+.btn-danger {
+    background: var(--danger);
     color: white;
-    font-weight: bold;
-    transition: 0.2s;
 }
 
-.nav a:hover {
-    background: #1d4ed8;
-    transform: scale(1.05);
+.btn-danger:hover {
+    background: #dc2626;
+    box-shadow: 0 15px 35px rgba(239, 68, 68, 0.3);
 }
 
-/* -------------------------
-   LINKS GENERAL
-------------------------- */
-a {
-    color: #38bdf8;
+.full-width {
+    width: 100%;
 }
 
-/* -------------------------
-   TABLE STYLE (orders)
-------------------------- */
-table {
+.button-group {
+    display: flex;
+    gap: 12px;
+    margin-top: 30px;
+}
+
+.button-group .btn {
+    flex: 1;
+}
+
+/* --------- NAVIGATION LINKS --------- */
+.nav-links {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 40px;
+    flex-wrap: wrap;
+}
+
+.nav-links .btn {
+    min-width: 200px;
+}
+
+.action-links {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 40px;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+.action-links .btn {
+    min-width: 180px;
+}
+
+/* --------- LOGIN BOX --------- */
+.login-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    max-width: 400px;
+    margin: 0 auto 40px;
+    backdrop-filter: blur(10px);
+}
+
+.login-box h2 {
+    color: var(--primary);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.login-hint {
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 0.95rem;
+}
+
+/* --------- FORMS --------- */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
+.form-group input::placeholder {
+    color: var(--text-muted);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(0, 212, 255, 0.05);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+}
+
+.order-form {
+    margin-top: 30px;
+}
+
+.wallet-info {
+    background: rgba(0, 212, 255, 0.1);
+    border-left: 3px solid var(--primary);
+    padding: 12px 15px;
+    border-radius: 6px;
+    margin-bottom: 25px;
+    color: var(--text-secondary);
+}
+
+.wallet-info strong {
+    color: var(--primary);
+}
+
+/* --------- ORDERS SECTION --------- */
+.orders-section {
+    margin-bottom: 40px;
+}
+
+.orders-section h2 {
+    color: var(--primary);
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+}
+
+.orders-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 10px;
-    background: rgba(255,255,255,0.03);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
 }
 
-th, td {
-    padding: 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
+.orders-table thead {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), transparent);
+    border-bottom: 2px solid var(--primary);
+}
+
+.orders-table th {
+    padding: 15px;
     text-align: left;
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.5px;
 }
 
-th {
-    background: rgba(255,255,255,0.08);
-    color: #38bdf8;
+.orders-table td {
+    padding: 15px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.orders-table tbody tr:hover {
+    background: rgba(0, 212, 255, 0.05);
+}
+
+.order-id {
+    color: var(--primary);
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+.no-orders {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+/* --------- BADGES --------- */
+.badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.3px;
+}
+
+.badge-buy {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+    border: 1px solid var(--success);
+}
+
+.badge-sell {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+/* --------- STATUS LABELS --------- */
+.status-nieuw {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.status-geannuleerd {
+    color: var(--danger);
+    font-weight: 600;
+    text-decoration: line-through;
+}
+
+.status-uitgevoerd-on-kraken,
+.status-uitgevoerd-on-kucoin,
+.status-uitgevoerd-on-binance,
+.status-uitgevoerd-on-bitfinex {
+    color: var(--success);
+    font-weight: 600;
+}
+
+/* --------- ORDER FORM SECTION --------- */
+.order-form-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 30px;
+    backdrop-filter: blur(10px);
+}
+
+.order-form-section h2 {
+    color: var(--primary);
+    margin-bottom: 20px;
+}
+
+/* --------- ERROR BOX --------- */
+.error-box {
+    background: var(--bg-card);
+    border: 1px solid var(--danger);
+    border-radius: 12px;
+    padding: 60px 40px;
+    text-align: center;
+    margin-top: 60px;
+}
+
+.error-box h1 {
+    color: var(--danger);
+    font-size: 4rem;
+    margin-bottom: 15px;
+}
+
+.error-box p {
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    font-size: 1.1rem;
+}
+
+/* --------- RESPONSIVE --------- */
+@media (max-width: 768px) {
+    .header h1 {
+        font-size: 2.5rem;
+    }
+
+    .header {
+        padding: 40px 20px 30px;
+        margin-bottom: 30px;
+    }
+
+    .welcome-box,
+    .login-box,
+    .order-form-section {
+        padding: 30px 20px;
+    }
+
+    .orders-table {
+        font-size: 0.9rem;
+    }
+
+    .orders-table th,
+    .orders-table td {
+        padding: 12px 8px;
+    }
+
+    .button-group {
+        flex-direction: column;
+    }
+
+    .nav-links,
+    .action-links {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .nav-links .btn,
+    .action-links .btn {
+        width: 100%;
+        min-width: unset;
+    }
+}
+
+/* --------- SCROLLBAR STYLING --------- */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dark);
 }
