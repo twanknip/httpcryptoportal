@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>CryptoPortal</title>
+    </head>
+    <body background="cryptoportal.jpeg">
+        <h1>CryptoPortal</h1>
+        <hr>
+    	<form method='GET' action='/orderenter'>
+            <label>Wallet ID <i>(3-digit PIN)</i></label>:&nbsp;<input type='number' name='walletid'></input><br>
+            <label>Crypto</label>:&nbsp;<select id='cryptoid' name='cryptoid'>__CRYPTOS__</select><br>
+            <label>Side</label>:&nbsp;<select id='side' name='side'><option value='Buy'>Buy</option><option value='Sell'>Sell</option></select><br>
+            <label>Price</label>:&nbsp;<input type='number' name='price'></input><br>
+            <label>Currency</label>:&nbsp;<select id='currency' name='currency'><option value='EUR'>EUR</option><option value='USD'>USD</option><option value='GBP'>GBP</option></select><br>
+            <label>Quantity</label>:&nbsp;<input type='number' name='quantity'></input><br>   
+            <br>             
+            <input type='submit' value='Enter'></input>
+        </form>
+        <hr>
+        <div>Click <a href="/">here</a> for the main page</div>
+        <div>Click <a href="/orderview">here</a> to view orders</div>
+        <div>Click <a href="/orderenter">here</a> to enter orders</div>
+    </body>
+</html>

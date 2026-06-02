@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>CryptoPortal</title>
+    </head>
+    <body background="cryptoportal.jpeg">
+        <h1>CryptoPortal</h1>
+        <hr>
+    	<form method='GET' action='/orderview'>
+            <label>Wallet ID <i>(3-digit PIN)</i></label>:&nbsp;<input type='number' name='walletid'></input>&nbsp;
+            <input type='submit' value='View'></input>
+        </form>
+        <hr>
+        <div><i>Orders for __WALLETID__</i></div>
+        <br>
+        __ORDERS__
+        <hr>
+        <div>Click <a href="/">here</a> for the main page</div>
+        <div>Click <a href="/orderview">here</a> to view orders</div>
+        <div>Click <a href="/orderenter">here</a> to enter orders</div>
+    </body>
+</html>
